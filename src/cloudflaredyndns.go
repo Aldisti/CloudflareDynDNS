@@ -26,11 +26,14 @@ func main() {
 		return
 	}
 
+	done := make(chan bool)
 	ticker := time.NewTicker(time.Duration(ctx.Env.Interval) * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
+		case <- done:
+			return
 		case <-ticker.C:
 			if !routine(&ctx) {
 				return
@@ -121,10 +124,11 @@ func getCurrentIp() (string, error) {
 		return "", fmt.Errorf("NewRequest failed: %s", err)
 	}
 
-	client := http.Client{Timeout: 500 * time.Millisecond}
+	env := internal.GetEnv()
+	client := http.Client{Timeout: time.Duration(env.Timeout) * time.Second}
 	res, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("DefaultClient.Do failed: %s", err)
+		return "", fmt.Errorf("Couldn't make request: %s", err)
 	}
 
 	resBody, err := io.ReadAll(res.Body)

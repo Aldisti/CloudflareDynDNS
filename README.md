@@ -32,6 +32,7 @@ Environment variables:
  - **DOMAIN**: the full domain (e.g. myapp.example.com)
  - **INTERVAL**: how often update the DNS record, in seconds
  - **MAX_FAILURES**: maximum number of failures before stopping the program
+ - **TIMEOUT**: http requests timeout, in seconds
 
 Of these variables, only the last two (INTERVAL and MAX_FAILURES) are optional, the others are all mandatory.
 

@@ -146,8 +146,9 @@ func buildRequest(method, url, body string) (*http.Request, error) {
 }
 
 func makeRequest(req *http.Request, response any) error {
+	env := internal.GetEnv()
 	client := http.Client{
-		Timeout: 2 * time.Second,
+		Timeout: time.Duration(env.Timeout) * time.Second,
 	}
 
 	res, err := client.Do(req)
