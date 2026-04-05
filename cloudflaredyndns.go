@@ -1,86 +1,116 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"strings"
 	"time"
+
+	"github.com/Aldisti/CloudflareDynDNS/internal"
+	"github.com/Aldisti/CloudflareDynDNS/internal/cloudflare"
 )
 
-const (
-	ENV_ZONE_ID   = "ZONE_ID"
-	ENV_RECORD_ID = "RECORD_ID"
-	ENV_API_TOKEN = "API_TOKEN"
-	ENV_API_URL   = "API_URL"
-)
-
-type Environment struct {
-	ZoneId   string
-	RecordId string
-	ApiToken string
-	ApiUrl   string
-}
-
-type CloudflareMessage struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-}
-
-type CloudflareResponse struct {
-	Success  bool                `json:"success"`
-	Errors   []CloudflareMessage `json:"errors"`
-	Messages []CloudflareMessage `json:"messages"`
+type Context struct {
+	Env         *internal.Environment
+	Record      cloudflare.Record
+	CurrentIP   string
+	LastUpdate  time.Time
+	Failures    int
+	LastFailure time.Time
 }
 
 func main() {
-	env, err := loadEnvironment()
+	ctx, err := buildCtx()
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
+
+	ticker := time.NewTicker(time.Duration(ctx.Env.Interval) * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			if !routine(&ctx) {
+				return
+			}
+		}
+	}
+}
+
+func buildCtx() (Context, error) {
+	ctx := Context{
+		Failures: 0,
+	}
+
+	if env, err := internal.GetEnvSafe(); err != nil {
+		return ctx, err
+	} else {
+		ctx.Env = env
+	}
+
+	if ip, err := getCurrentIp(); err != nil {
+		return ctx, err
+	} else {
+		ctx.CurrentIP = ip
+	}
+
+	if record, ok, err := cloudflare.GetFirstRecord(ctx.Env.Domain, "A"); err != nil || !ok {
+		if err != nil {
+			fmt.Println(err)
+		}
+		record = cloudflare.Record{
+			Name:    ctx.Env.Domain,
+			Type:    "A",
+			Content: ctx.CurrentIP,
+			TTL:     max(ctx.Env.Interval*2, 60),
+			Proxied: false,
+			Comment: "Created by CloudflareDynDNS",
+		}
+		record, err = cloudflare.CreateRecord(record)
+		if err != nil {
+			return ctx, fmt.Errorf("BuildCtx: %s", err)
+		}
+		ctx.Record = record
+		fmt.Println("Record created successfully")
+	} else {
+		ctx.Record = record
+	}
+
+	return ctx, nil
+}
+
+func routine(ctx *Context) (bool) {
+	if ctx.Failures > ctx.Env.MaxFails {
+		fmt.Println("Reached maximum number of failures, aborting")
+		return false
+	}
+
 	ip, err := getCurrentIp()
 	if err != nil {
 		fmt.Println(err)
-		return
+		addFailure(ctx)
+		return true
 	}
-	if err = updateRecord(env, ip); err != nil {
+
+	if ip == ctx.CurrentIP && ip == ctx.Record.Content {
+		fmt.Println("Record already up to date, skipping")
+		return true
+	}
+
+	if err := cloudflare.UpdateRecord(ctx.Record.ID, ip); err != nil {
 		fmt.Println(err)
+		addFailure(ctx)
+	} else {
+		fmt.Println("Record updated with new ip:", ip)
 	}
+	return true
 }
 
-func isBlank(s string) bool {
-	return strings.TrimSpace(s) == ""
-}
-
-func loadEnvironment() (Environment, error) {
-	env := Environment{
-		ApiUrl: "https://api.cloudflare.com/client/v4/zones/%s/dns_records/%s",
-	}
-	if s, ok := os.LookupEnv(ENV_ZONE_ID); !ok || isBlank(s) {
-		return env, fmt.Errorf("Error: missing env variable: %s", ENV_ZONE_ID)
-	} else {
-		env.ZoneId = s
-	}
-	if s, ok := os.LookupEnv(ENV_RECORD_ID); !ok || isBlank(s) {
-		return env, fmt.Errorf("Error: missing env variable: %s", ENV_RECORD_ID)
-	} else {
-		env.RecordId = s
-	}
-	if s, ok := os.LookupEnv(ENV_API_TOKEN); !ok || isBlank(s) {
-		return env, fmt.Errorf("Error: missing env variable: %s", ENV_API_TOKEN)
-	} else {
-		env.ApiToken = s
-	}
-	if s, ok := os.LookupEnv(ENV_API_URL); !ok || isBlank(s) {
-		fmt.Printf("Warning: using %s default value\n", ENV_API_URL)
-	} else {
-		env.ApiUrl = s
-	}
-	return env, nil
+func addFailure(ctx *Context) {
+	ctx.Failures++
+	ctx.LastFailure = time.Now()
 }
 
 func getCurrentIp() (string, error) {
@@ -89,7 +119,8 @@ func getCurrentIp() (string, error) {
 		return "", fmt.Errorf("NewRequest failed: %s", err)
 	}
 
-	res, err := http.DefaultClient.Do(req)
+	client := http.Client{Timeout: 500 * time.Millisecond}
+	res, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("DefaultClient.Do failed: %s", err)
 	}
@@ -103,70 +134,4 @@ func getCurrentIp() (string, error) {
 	} else {
 		return "", fmt.Errorf("Received status code %d: %s", res.StatusCode, resBody)
 	}
-}
-
-func updateRecord(env Environment, newIp string) error {
-
-	url := fmt.Sprintf(env.ApiUrl, env.ZoneId, env.RecordId)
-	body := fmt.Sprintf(`{"content": "%s"}`, newIp)
-
-	req, err := http.NewRequest(http.MethodPatch, url, bytes.NewReader([]byte(body)))
-	if err != nil { // create new request
-		return fmt.Errorf("Couldn't create PATCH request: %s", err)
-	}
-
-	// add headers to request
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", env.ApiToken))
-
-	client := http.Client{ // create custom http client
-		Timeout: 1 * time.Second,
-	}
-
-	res, err := client.Do(req) // make request
-	if err != nil {
-		return fmt.Errorf("PATCH request failed: %s", err)
-	}
-
-	resBody, err := io.ReadAll(res.Body) // read response body
-	if err != nil {
-		return fmt.Errorf("Couldn't read response: %s", err)
-	}
-
-	if res.StatusCode != http.StatusOK { // check response status
-		return fmt.Errorf("Received status code %d: %s", res.StatusCode, string(resBody))
-	}
-
-	var response CloudflareResponse // unmarshall response body into struct
-	if err = json.Unmarshal(resBody, &response); err != nil {
-		return fmt.Errorf("Couldn't parse cloudflare response: %s", err)
-	}
-
-	if response.Success { // check cloudflare response status
-		fmt.Println("Record successfully updated with new IP:", newIp)
-		return nil
-	}
-
-	return fmt.Errorf("Error while updating record: %s", string(resBody))
-}
-
-func Ticker() {
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-
-	done := make(chan bool)
-
-	go func() {
-		for {
-			select {
-			case <-done:
-				return
-			case t := <-ticker.C:
-				fmt.Println("Ticking", t)
-			}
-		}
-	}()
-
-	time.Sleep(30 * time.Second) // Run for 30 seconds
-	done <- true
 }
