@@ -104,6 +104,8 @@ func routine(ctx *Context) (bool) {
 		addFailure(ctx)
 	} else {
 		fmt.Println("Record updated with new ip:", ip)
+		ctx.CurrentIP = ip
+		ctx.Record.Content = ip
 	}
 	return true
 }
