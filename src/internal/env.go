@@ -21,7 +21,7 @@ const (
 
 type Environment struct {
 	ApiToken string
-	Domain   string
+	Domains   []string
 	Interval int
 	MaxFails int
 	Timeout  int
@@ -51,7 +51,8 @@ func loadEnvironment() (Environment, error) {
 	if err := setEnvVar(ENV_API_TOKEN, func(s string) { env.ApiToken = s }); err != nil {
 		return env, err
 	}
-	if err := setEnvVar(ENV_DOMAIN, func(s string) { env.Domain = s }); err != nil {
+
+	if err := setEnvVar(ENV_DOMAIN, func(s string) { env.Domains = strings.Split(s, ",") }); err != nil {
 		return env, err
 	}
 

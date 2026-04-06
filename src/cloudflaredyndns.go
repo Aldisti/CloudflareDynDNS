@@ -12,8 +12,7 @@ import (
 
 type Context struct {
 	Env         *internal.Environment
-	Record      cloudflare.Record
-	Zone        cloudflare.Zone
+	Records      []cloudflare.Record
 	CurrentIP   string
 	LastUpdate  time.Time
 	Failures    int
@@ -46,6 +45,7 @@ func main() {
 func buildCtx() (Context, error) {
 	ctx := Context{
 		Failures: 0,
+		Records: make([]cloudflare.Record, 0),
 	}
 
 	if env, err := internal.GetEnvSafe(); err != nil {
@@ -60,33 +60,29 @@ func buildCtx() (Context, error) {
 		ctx.CurrentIP = ip
 	}
 
-	zone, err := cloudflare.FindMatchingZone(ctx.Env.Domain)
-	if err != nil {
-		return ctx, err
-	} else {
-		ctx.Zone = zone
-	}
-
-	if record, ok, err := cloudflare.GetFirstRecord(zone.ID, ctx.Env.Domain, "A"); err != nil || !ok {
+	for _, domain := range ctx.Env.Domains {
+		record, ok, err := cloudflare.GetFirstRecord(domain, "A")
+		if ok {
+			ctx.Records = append(ctx.Records, record)
+			continue
+		}
 		if err != nil {
-			fmt.Println(err)
+			fmt.Printf("Error while searching for %s: %s\n", domain, err)
 		}
 		record = cloudflare.Record{
-			Name:    ctx.Env.Domain,
-			Type:    "A",
+			Name: domain,
+			Type: "A",
 			Content: ctx.CurrentIP,
-			TTL:     max(ctx.Env.Interval*2, 60),
+			TTL: max(ctx.Env.Interval * 2, 60),
 			Proxied: false,
-			Comment: "Created by CloudflareDynDNS",
+			Comment: "Created by github.com/aldisti/CloudflareDynDNS",
 		}
-		record, err = cloudflare.CreateRecord(zone.ID, record)
+		record, err = cloudflare.CreateRecord(record)
 		if err != nil {
 			return ctx, fmt.Errorf("BuildCtx: %s", err)
 		}
-		ctx.Record = record
-		fmt.Println("Record created successfully")
-	} else {
-		ctx.Record = record
+		ctx.Records = append(ctx.Records, record)
+		fmt.Printf("Record %s created\n", domain)
 	}
 
 	return ctx, nil
@@ -105,19 +101,23 @@ func routine(ctx *Context) bool {
 		return true
 	}
 
-	if ip == ctx.CurrentIP && ip == ctx.Record.Content {
-		fmt.Println("Record already up to date, skipping")
+	if ip == ctx.CurrentIP {
+		fmt.Println("IP didn't change, skipping")
 		return true
 	}
 
-	if err := cloudflare.UpdateRecord(ctx.Zone.ID, ctx.Record.ID, ip); err != nil {
-		fmt.Println(err)
-		addFailure(ctx)
-	} else {
-		fmt.Println("Record updated with new ip:", ip)
-		ctx.CurrentIP = ip
-		ctx.Record.Content = ip
+	for i, record := range ctx.Records {
+		record, err = cloudflare.UpdateRecord(record.Name, record.ID, ip)
+		if err != nil {
+			addFailure(ctx)
+			fmt.Println(err)
+		} else {
+			ctx.CurrentIP = ip
+			ctx.Records[i] = record
+			fmt.Printf("Record %s updated with new ip: %s\n", record.Name, ip)
+		}
 	}
+
 	return true
 }
 
