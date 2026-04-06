@@ -1,46 +1,58 @@
 # CloudflareDynDNS
-Simple Go script to automatically update a DNS record in Cloudflare
+
+CloudflareDynDNS is a lightweight Go application that keeps a Cloudflare DNS record updated with your current public IP.
+
+## Requirements
+
+- Go 1.24+
+- A Cloudflare API token with permission to edit DNS records
 
 ## Build
 
-### Local
-
-If you don't need the docker image, then use the following commands:
+### Build locally
 
 ```sh
 git clone https://github.com/Aldisti/CloudflareDynDNS.git
 cd CloudflareDynDNS
-go build -C src .
+go build -C src -o CloudflareDynDNS .
 ```
 
-### Docker Image
+This creates the binary at `src/CloudflareDynDNS`.
 
-Build the Docker image using the following commands:
+### Build Docker image
 
 ```sh
 git clone https://github.com/Aldisti/CloudflareDynDNS.git
 cd CloudflareDynDNS
-CGO_ENABLED=0 GOOS=linux go build -C src -a -installsuffix cgo .
-docker build -t cloudflare-dyndns .
+CGO_ENABLED=0 GOOS=linux go build -C src -a -installsuffix cgo -o CloudflareDynDNS .
+docker build -t cloudflare-dyndns:latest .
 ```
+
+## Configuration
+
+Environment variables:
+
+- `API_TOKEN` (required): Cloudflare API token
+- `DOMAIN` (required): full domain name to update (for example myapp.example.com)
+- `INTERVAL` (optional): update interval in seconds
+- `MAX_FAILURES` (optional): maximum consecutive failures before exit
+- `TIMEOUT` (optional): HTTP timeout in seconds
+
+Only `API_TOKEN` and `DOMAIN` are mandatory.
 
 ## Run
 
-Environment variables:
- - **ZONE_ID**: your Cloudflare DNS Zone ID
- - **API_TOKEN**: your Cloudflare API Token
- - **DOMAIN**: the full domain (e.g. myapp.example.com)
- - **INTERVAL**: how often update the DNS record, in seconds
- - **MAX_FAILURES**: maximum number of failures before stopping the program
- - **TIMEOUT**: http requests timeout, in seconds
-
-Of these variables, only the last two (INTERVAL and MAX_FAILURES) are optional, the others are all mandatory.
-
-### Docker
+### Run binary
 
 ```sh
-docker run aldisti/cloudflare-dyndns:latest \
-    -e API_TOKEN <api_token> \
-    -e ZONE_ID <zone_id> \
-    -e DOMAIN <your.full.domain>
+API_TOKEN=<api_token> DOMAIN=<your.full.domain> ./src/CloudflareDynDNS
+```
+
+### Run with Docker
+
+```sh
+docker run --rm \
+    -e API_TOKEN=<api_token> \
+    -e DOMAIN=<your.full.domain> \
+    cloudflare-dyndns:latest
 ```
