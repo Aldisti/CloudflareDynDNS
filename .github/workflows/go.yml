@@ -50,8 +50,8 @@ jobs:
         with:
           images: ${{ secrets.DOCKER_USERNAME }}/cloudflare-dyndns
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=${{ steps.version.outputs.version }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
       # 8. Build and push the Docker image
       - name: Build and push Docker image
