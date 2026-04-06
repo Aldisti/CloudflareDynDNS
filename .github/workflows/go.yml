@@ -22,7 +22,7 @@ jobs:
 
       # 3. Run tests
       - name: Run tests
-        run: go test ./...
+        run: go test -C src
 
       # 4. Build Go binary
       - name: Build Go binary
