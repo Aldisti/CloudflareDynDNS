@@ -13,6 +13,7 @@ import (
 type Context struct {
 	Env         *internal.Environment
 	Record      cloudflare.Record
+	Zone        cloudflare.Zone
 	CurrentIP   string
 	LastUpdate  time.Time
 	Failures    int
@@ -59,7 +60,14 @@ func buildCtx() (Context, error) {
 		ctx.CurrentIP = ip
 	}
 
-	if record, ok, err := cloudflare.GetFirstRecord(ctx.Env.Domain, "A"); err != nil || !ok {
+	zone, err := cloudflare.FindMatchingZone(ctx.Env.Domain)
+	if err != nil {
+		return ctx, err
+	} else {
+		ctx.Zone = zone
+	}
+
+	if record, ok, err := cloudflare.GetFirstRecord(zone.ID, ctx.Env.Domain, "A"); err != nil || !ok {
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -71,7 +79,7 @@ func buildCtx() (Context, error) {
 			Proxied: false,
 			Comment: "Created by CloudflareDynDNS",
 		}
-		record, err = cloudflare.CreateRecord(record)
+		record, err = cloudflare.CreateRecord(zone.ID, record)
 		if err != nil {
 			return ctx, fmt.Errorf("BuildCtx: %s", err)
 		}
@@ -84,7 +92,7 @@ func buildCtx() (Context, error) {
 	return ctx, nil
 }
 
-func routine(ctx *Context) (bool) {
+func routine(ctx *Context) bool {
 	if ctx.Failures > ctx.Env.MaxFails {
 		fmt.Println("Reached maximum number of failures, aborting")
 		return false
@@ -102,7 +110,7 @@ func routine(ctx *Context) (bool) {
 		return true
 	}
 
-	if err := cloudflare.UpdateRecord(ctx.Record.ID, ip); err != nil {
+	if err := cloudflare.UpdateRecord(ctx.Zone.ID, ctx.Record.ID, ip); err != nil {
 		fmt.Println(err)
 		addFailure(ctx)
 	} else {

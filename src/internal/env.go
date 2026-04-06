@@ -12,7 +12,6 @@ var (
 )
 
 const (
-	ENV_ZONE_ID   = "ZONE_ID"
 	ENV_API_TOKEN = "API_TOKEN"
 	ENV_DOMAIN    = "DOMAIN"
 	ENV_INTERVAL  = "INTERVAL"
@@ -21,7 +20,6 @@ const (
 )
 
 type Environment struct {
-	ZoneId   string
 	ApiToken string
 	Domain   string
 	Interval int
@@ -50,27 +48,16 @@ func GetEnvSafe() (*Environment, error) {
 
 func loadEnvironment() (Environment, error) {
 	env := Environment{}
-	if err := setEnvVar(ENV_ZONE_ID, func(s string) { env.ZoneId = s }); err != nil {
-		return env, err
-	}
 	if err := setEnvVar(ENV_API_TOKEN, func(s string) { env.ApiToken = s }); err != nil {
 		return env, err
 	}
 	if err := setEnvVar(ENV_DOMAIN, func(s string) { env.Domain = s }); err != nil {
 		return env, err
 	}
-	if err := setEnvVarInt(ENV_INTERVAL, func(n int) { env.Interval = n }); err != nil {
-		env.Interval = 30
-		fmt.Printf("Using default value %d for %s\n", env.Interval, ENV_INTERVAL)
-	}
-	if err := setEnvVarInt(ENV_MAX_FAILS, func(n int) { env.MaxFails = n }); err != nil {
-		env.Interval = 10
-		fmt.Printf("Using default value %d for %s\n", env.MaxFails, ENV_MAX_FAILS)
-	}
-	if err := setEnvVarInt(ENV_TIMEOUT, func(n int) { env.Timeout = n }); err != nil {
-		env.Timeout = 1
-		fmt.Printf("Using default value %d for %s\n", env.Timeout, ENV_TIMEOUT)
-	}
+
+	setEnvVarIntDefault(ENV_INTERVAL, 60, func(n int) { env.Interval = n })
+	setEnvVarIntDefault(ENV_MAX_FAILS, 5, func(n int) { env.MaxFails = n })
+	setEnvVarIntDefault(ENV_TIMEOUT, 2, func(n int) { env.Timeout = n })
 
 	return env, nil
 }
@@ -85,6 +72,13 @@ func setEnvVar(name string, consumer func(string)) error {
 	} else {
 		consumer(s)
 		return nil
+	}
+}
+
+func setEnvVarIntDefault(name string, def int, consumer func(int)) {
+	if err := setEnvVarInt(name, consumer); err != nil {
+		consumer(def)
+		fmt.Printf("Using default value %d for %s\n", def, name)
 	}
 }
 

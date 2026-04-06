@@ -61,11 +61,10 @@ type Response[T any] struct {
  * Main API methods
  */
 
-func GetFirstRecord(name, tipe string) (Record, bool, error) {
+func GetFirstRecord(zoneId, name, tipe string) (Record, bool, error) {
 	var record Record
-	env := internal.GetEnv()
 
-	url := fmt.Sprintf(LIST_RECORDS, env.ZoneId, name, tipe)
+	url := fmt.Sprintf(LIST_RECORDS, zoneId, name, tipe)
 	req, err := buildRequest(http.MethodGet, url, "")
 	if err != nil {
 		return record, false, fmt.Errorf("GetFirstRecord: %s", err)
@@ -85,10 +84,8 @@ func GetFirstRecord(name, tipe string) (Record, bool, error) {
 	}
 }
 
-func CreateRecord(record Record) (Record, error) {
-	env := internal.GetEnv()
-
-	url := fmt.Sprintf(CREATE_RECORDS, env.ZoneId)
+func CreateRecord(zoneId string, record Record) (Record, error) {
+	url := fmt.Sprintf(CREATE_RECORDS, zoneId)
 	body, err := json.Marshal(record)
 	if err != nil {
 		return record, fmt.Errorf("Failed to marshal record: %s", err)
@@ -109,10 +106,8 @@ func CreateRecord(record Record) (Record, error) {
 	}
 }
 
-func UpdateRecord(recordId, content string) error {
-	env := internal.GetEnv()
-
-	url := fmt.Sprintf(UPDATE_RECORD, env.ZoneId, recordId)
+func UpdateRecord(zoneId, recordId, content string) error {
+	url := fmt.Sprintf(UPDATE_RECORD, zoneId, recordId)
 	body := fmt.Sprintf(`{"content":"%s"}`, content)
 
 	req, err := buildRequest(http.MethodPatch, url, body)
