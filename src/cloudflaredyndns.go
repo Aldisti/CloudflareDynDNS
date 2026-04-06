@@ -89,7 +89,7 @@ func buildCtx() (Context, error) {
 }
 
 func routine(ctx *Context) bool {
-	if ctx.Failures > ctx.Env.MaxFails {
+	if ctx.Env.MaxFails >= 0 && ctx.Failures > ctx.Env.MaxFails {
 		fmt.Println("Reached maximum number of failures, aborting")
 		return false
 	}
@@ -98,11 +98,6 @@ func routine(ctx *Context) bool {
 	if err != nil {
 		fmt.Println(err)
 		addFailure(ctx)
-		return true
-	}
-
-	if ip == ctx.CurrentIP {
-		fmt.Println("IP didn't change, skipping")
 		return true
 	}
 
