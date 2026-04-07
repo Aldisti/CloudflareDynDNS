@@ -57,14 +57,23 @@ type Response[T any] struct {
 	Result   T         `json:"result"`
 }
 
+var (
+	zones = make(map[string]Zone)
+)
+
 /*
  * Main API methods
  */
 
-func GetFirstRecord(zoneId, name, tipe string) (Record, bool, error) {
+func GetFirstRecord(name, tipe string) (Record, bool, error) {
 	var record Record
 
-	url := fmt.Sprintf(LIST_RECORDS, zoneId, name, tipe)
+	zone, err := FindMatchingZone(name)
+	if err != nil {
+		return record, false, err
+	}
+
+	url := fmt.Sprintf(LIST_RECORDS, zone.ID, name, tipe)
 	req, err := buildRequest(http.MethodGet, url, "")
 	if err != nil {
 		return record, false, fmt.Errorf("GetFirstRecord: %s", err)
@@ -84,8 +93,13 @@ func GetFirstRecord(zoneId, name, tipe string) (Record, bool, error) {
 	}
 }
 
-func CreateRecord(zoneId string, record Record) (Record, error) {
-	url := fmt.Sprintf(CREATE_RECORDS, zoneId)
+func CreateRecord(record Record) (Record, error) {
+	zone, err := FindMatchingZone(record.Name)
+	if err != nil {
+		return record, err
+	}
+
+	url := fmt.Sprintf(CREATE_RECORDS, zone.ID)
 	body, err := json.Marshal(record)
 	if err != nil {
 		return record, fmt.Errorf("Failed to marshal record: %s", err)
@@ -106,50 +120,78 @@ func CreateRecord(zoneId string, record Record) (Record, error) {
 	}
 }
 
-func UpdateRecord(zoneId, recordId, content string) error {
-	url := fmt.Sprintf(UPDATE_RECORD, zoneId, recordId)
-	body := fmt.Sprintf(`{"content":"%s"}`, content)
+func UpdateRecord(domain, recordId, content string) (Record, error) {
+	var record Record
+	zone, err := FindMatchingZone(domain)
+	if err != nil {
+		return record, err
+	}
 
+	url := fmt.Sprintf(UPDATE_RECORD, zone.ID, recordId)
+	body := fmt.Sprintf(`{"content":"%s"}`, content)
 	req, err := buildRequest(http.MethodPatch, url, body)
 	if err != nil {
-		return fmt.Errorf("UpdateRecord: %s", err)
+		return record, fmt.Errorf("UpdateRecord: %s", err)
 	}
 
 	var res Response[Record]
 	if err = makeRequest(req, &res); err != nil {
-		return fmt.Errorf("UpdateRecord: %s", err)
+		return record, fmt.Errorf("UpdateRecord: %s", err)
 	}
 
 	if res.Success {
-		return nil
+		return res.Result, nil
 	} else {
-		return fmt.Errorf("UpdateRecord: Couldn't update record")
+		return record, fmt.Errorf("UpdateRecord: Couldn't update record")
 	}
-
 }
 
 func FindMatchingZone(domain string) (Zone, error) {
-	var zone Zone
+
+	if len(zones) == 0 {
+		if err := SetupZones(); err != nil {
+			return Zone{}, fmt.Errorf("FindMatchingZone: %s", err)
+		}
+	}
+
+	for name, zone := range zones {
+		if strings.HasSuffix(domain, name) {
+			return zone, nil
+		}
+	}
+
+	return Zone{}, fmt.Errorf("FindZone: didn't find any zone matching %s", domain)
+}
+
+// SetupZones is a setup function that loads in memory all the available zones.
+//
+// Should be used only once at the startup of the program.
+func SetupZones() error {
+	if len(zones) > 0 {
+		return nil
+	}
 
 	req, err := buildRequest(http.MethodGet, LIST_ZONES, "")
 	if err != nil {
-		return zone, fmt.Errorf("FindZone: %s", err)
+		return fmt.Errorf("SetupZones: %s", err)
 	}
 
 	var res Response[[]Zone]
 	if err = makeRequest(req, &res); err != nil {
-		return zone, fmt.Errorf("FindZone: %s", err)
+		return fmt.Errorf("SetupZones: %s", err)
 	}
 
-	for _, z := range res.Result {
-		if z.Status != "active" {
-			continue
-		}
-		if strings.HasSuffix(domain, z.Name) {
-			return z, nil
-		}
+	if !res.Success {
+		return fmt.Errorf("SetupZones: failed")
+	} else if len(res.Result) == 0 {
+		return fmt.Errorf("SetupZones: no zone found")
 	}
-	return zone, fmt.Errorf("FindZone: didn't find any zone mathing %s", domain)
+
+	for _, zone := range res.Result {
+		zones[zone.Name] = zone
+	}
+
+	return nil
 }
 
 /*
