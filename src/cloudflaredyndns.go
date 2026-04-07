@@ -6,12 +6,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Aldisti/CloudflareDynDNS/internal"
-	"github.com/Aldisti/CloudflareDynDNS/internal/cloudflare"
+	"github.com/Aldisti/CloudflareDynDNS/config"
+	"github.com/Aldisti/CloudflareDynDNS/cloudflare"
 )
 
 type Context struct {
-	Env         *internal.Environment
+	Env         *config.Environment
 	Records      []cloudflare.Record
 	CurrentIP   string
 	LastUpdate  time.Time
@@ -77,7 +77,7 @@ func buildCtx() (Context) {
 		Records: make([]cloudflare.Record, 0),
 	}
 
-	if env, err := internal.GetEnvSafe(); err != nil {
+	if env, err := config.GetEnvSafe(); err != nil {
 		panic(err)
 	} else {
 		ctx.Env = env
@@ -134,7 +134,7 @@ func getCurrentIp() (string, error) {
 		return "", fmt.Errorf("NewRequest failed: %s", err)
 	}
 
-	env := internal.GetEnv()
+	env := config.GetEnv()
 	client := http.Client{Timeout: env.Timeout}
 	res, err := client.Do(req)
 	if err != nil {
