@@ -38,6 +38,39 @@ func main() {
 	}
 }
 
+func routine(ctx *Context) bool {
+
+	if ctx.Env.Cooldown >= 0 && time.Since(ctx.LastFailure) > ctx.Env.Cooldown {
+		ctx.resetFailures()
+		fmt.Println("Failures reset") // debug
+	} else if ctx.Env.MaxFails >= 0 && ctx.Failures > ctx.Env.MaxFails {
+		fmt.Println("Reached maximum number of failures, aborting") // info
+		return false
+	}
+
+	ip, err := getCurrentIp()
+	if err != nil {
+		ctx.addFailure()
+		fmt.Println(err) // debug
+		return true
+	}
+
+	for i, record := range ctx.Records {
+		record, err = cloudflare.UpdateRecord(record.Name, record.ID, ip)
+		if err != nil {
+			ctx.addFailure()
+			fmt.Println(err) // debug
+		} else {
+			ctx.CurrentIP = ip
+			ctx.Records[i] = record
+			fmt.Printf("Record %s updated with new ip: %s\n", record.Name, ip) // info
+		}
+	}
+
+	return true
+}
+
+
 func buildCtx() (Context) {
 	ctx := Context{
 		Failures: 0,
@@ -85,44 +118,12 @@ func buildCtx() (Context) {
 	return ctx
 }
 
-func routine(ctx *Context) bool {
-
-	if ctx.Env.Cooldown >= 0 && time.Since(ctx.LastFailure) > ctx.Env.Cooldown {
-		resetFailures(ctx)
-		fmt.Println("Failures reset") // debug
-	} else if ctx.Env.MaxFails >= 0 && ctx.Failures > ctx.Env.MaxFails {
-		fmt.Println("Reached maximum number of failures, aborting") // info
-		return false
-	}
-
-	ip, err := getCurrentIp()
-	if err != nil {
-		addFailure(ctx)
-		fmt.Println(err) // debug
-		return true
-	}
-
-	for i, record := range ctx.Records {
-		record, err = cloudflare.UpdateRecord(record.Name, record.ID, ip)
-		if err != nil {
-			addFailure(ctx)
-			fmt.Println(err) // debug
-		} else {
-			ctx.CurrentIP = ip
-			ctx.Records[i] = record
-			fmt.Printf("Record %s updated with new ip: %s\n", record.Name, ip) // info
-		}
-	}
-
-	return true
-}
-
-func addFailure(ctx *Context) {
+func (ctx *Context) addFailure() {
 	ctx.Failures++
 	ctx.LastFailure = time.Now()
 }
 
-func resetFailures(ctx *Context) {
+func (ctx *Context) resetFailures() {
 	ctx.Failures = 0
 	ctx.LastFailure = time.Now()
 }
