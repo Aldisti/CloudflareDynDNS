@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var (
@@ -14,17 +15,19 @@ var (
 const (
 	ENV_API_TOKEN = "API_TOKEN"
 	ENV_DOMAIN    = "DOMAIN"
+	ENV_TIMEOUT   = "TIMEOUT"
 	ENV_INTERVAL  = "INTERVAL"
 	ENV_MAX_FAILS = "MAX_FAILURES"
-	ENV_TIMEOUT   = "TIMEOUT"
+	ENV_COOLDOWN  = "COOLDOWN"
 )
 
 type Environment struct {
 	ApiToken string
-	Domains   []string
+	Domains  []string
 	Interval int
 	MaxFails int
-	Timeout  int
+	Timeout  time.Duration
+	Cooldown time.Duration
 }
 
 func GetEnv() *Environment {
@@ -57,8 +60,14 @@ func loadEnvironment() (Environment, error) {
 	}
 
 	setEnvVarIntDefault(ENV_INTERVAL, 60, func(n int) { env.Interval = n })
-	setEnvVarIntDefault(ENV_MAX_FAILS, 5, func(n int) { env.MaxFails = n })
-	setEnvVarIntDefault(ENV_TIMEOUT, 2, func(n int) { env.Timeout = n })
+	setEnvVarIntDefault(ENV_MAX_FAILS, -1, func(n int) { env.MaxFails = n })
+
+	setEnvVarIntDefault(ENV_TIMEOUT, 2, func(n int) {
+		env.Timeout = time.Duration(n) * time.Second
+	})
+	setEnvVarIntDefault(ENV_COOLDOWN, -1, func(n int) {
+		env.Cooldown = time.Duration(n) * time.Second
+	})
 
 	return env, nil
 }

@@ -20,11 +20,7 @@ type Context struct {
 }
 
 func main() {
-	ctx, err := buildCtx()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	ctx := buildCtx()
 
 	done := make(chan bool)
 	ticker := time.NewTicker(time.Duration(ctx.Env.Interval) * time.Second)
@@ -42,20 +38,20 @@ func main() {
 	}
 }
 
-func buildCtx() (Context, error) {
+func buildCtx() (Context) {
 	ctx := Context{
 		Failures: 0,
 		Records: make([]cloudflare.Record, 0),
 	}
 
 	if env, err := internal.GetEnvSafe(); err != nil {
-		return ctx, err
+		panic(err)
 	} else {
 		ctx.Env = env
 	}
 
 	if ip, err := getCurrentIp(); err != nil {
-		return ctx, err
+		panic(err)
 	} else {
 		ctx.CurrentIP = ip
 	}
@@ -79,25 +75,30 @@ func buildCtx() (Context, error) {
 		}
 		record, err = cloudflare.CreateRecord(record)
 		if err != nil {
-			return ctx, fmt.Errorf("BuildCtx: %s", err)
+			panic(fmt.Errorf("BuildCtx: %s", err))
 		}
 		ctx.Records = append(ctx.Records, record)
 		fmt.Printf("Record %s created\n", domain)
 	}
 
-	return ctx, nil
+	fmt.Println("Context successfully built")
+	return ctx
 }
 
 func routine(ctx *Context) bool {
-	if ctx.Env.MaxFails >= 0 && ctx.Failures > ctx.Env.MaxFails {
-		fmt.Println("Reached maximum number of failures, aborting")
+
+	if ctx.Env.Cooldown >= 0 && time.Since(ctx.LastFailure) > ctx.Env.Cooldown {
+		resetFailures(ctx)
+		fmt.Println("Failures reset") // debug
+	} else if ctx.Env.MaxFails >= 0 && ctx.Failures > ctx.Env.MaxFails {
+		fmt.Println("Reached maximum number of failures, aborting") // info
 		return false
 	}
 
 	ip, err := getCurrentIp()
 	if err != nil {
-		fmt.Println(err)
 		addFailure(ctx)
+		fmt.Println(err) // debug
 		return true
 	}
 
@@ -105,11 +106,11 @@ func routine(ctx *Context) bool {
 		record, err = cloudflare.UpdateRecord(record.Name, record.ID, ip)
 		if err != nil {
 			addFailure(ctx)
-			fmt.Println(err)
+			fmt.Println(err) // debug
 		} else {
 			ctx.CurrentIP = ip
 			ctx.Records[i] = record
-			fmt.Printf("Record %s updated with new ip: %s\n", record.Name, ip)
+			fmt.Printf("Record %s updated with new ip: %s\n", record.Name, ip) // info
 		}
 	}
 
@@ -121,6 +122,11 @@ func addFailure(ctx *Context) {
 	ctx.LastFailure = time.Now()
 }
 
+func resetFailures(ctx *Context) {
+	ctx.Failures = 0
+	ctx.LastFailure = time.Now()
+}
+
 func getCurrentIp() (string, error) {
 	req, err := http.NewRequest(http.MethodGet, "https://api.ipify.org", nil)
 	if err != nil {
@@ -128,7 +134,7 @@ func getCurrentIp() (string, error) {
 	}
 
 	env := internal.GetEnv()
-	client := http.Client{Timeout: time.Duration(env.Timeout) * time.Second}
+	client := http.Client{Timeout: env.Timeout}
 	res, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't make request: %s", err)

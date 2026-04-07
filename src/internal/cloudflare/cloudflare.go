@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/Aldisti/CloudflareDynDNS/internal"
 )
@@ -220,7 +219,7 @@ func buildRequest(method, url, body string) (*http.Request, error) {
 func makeRequest(req *http.Request, response any) error {
 	env := internal.GetEnv()
 	client := http.Client{
-		Timeout: time.Duration(env.Timeout) * time.Second,
+		Timeout: env.Timeout,
 	}
 
 	res, err := client.Do(req)
