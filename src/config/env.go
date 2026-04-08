@@ -13,6 +13,12 @@ var (
 )
 
 const (
+	MODE_POLLER   = "POLLER"
+	MODE_LISTENER = "LISTENER"
+)
+
+const (
+	ENV_MODE      = "MODE"
 	ENV_API_TOKEN = "API_TOKEN"
 	ENV_DOMAIN    = "DOMAIN"
 	ENV_TIMEOUT   = "TIMEOUT"
@@ -22,6 +28,7 @@ const (
 )
 
 type Environment struct {
+	Mode     string
 	ApiToken string
 	Domains  []string
 	Interval int
@@ -51,6 +58,10 @@ func GetEnvSafe() (*Environment, error) {
 
 func loadEnvironment() (Environment, error) {
 	env := Environment{}
+
+	if err := setEnvVar(ENV_MODE, func(s string) { env.Mode = s }); err != nil {
+		env.Mode = MODE_POLLER
+	}
 	if err := setEnvVar(ENV_API_TOKEN, func(s string) { env.ApiToken = s }); err != nil {
 		return env, err
 	}
