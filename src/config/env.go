@@ -25,16 +25,24 @@ const (
 	ENV_INTERVAL  = "INTERVAL"
 	ENV_MAX_FAILS = "MAX_FAILURES"
 	ENV_COOLDOWN  = "COOLDOWN"
+	ENV_PORT      = "PORT"
+	ENV_USERNAME  = "USERNAME"
+	ENV_PASSWORD  = "PASSWORD"
 )
 
 type Environment struct {
 	Mode     string
 	ApiToken string
+
 	Domains  []string
 	Interval int
 	MaxFails int
 	Timeout  time.Duration
 	Cooldown time.Duration
+	// Listener mode-only variables
+	Port     int
+	Username string
+	Password string
 }
 
 func GetEnv() *Environment {
@@ -59,7 +67,7 @@ func GetEnvSafe() (*Environment, error) {
 func loadEnvironment() (Environment, error) {
 	env := Environment{}
 
-	if err := setEnvVar(ENV_MODE, func(s string) { env.Mode = s }); err != nil {
+	if err := setEnvVar(ENV_MODE, func(s string) { env.Mode = strings.ToUpper(s) }); err != nil {
 		env.Mode = MODE_POLLER
 	}
 	if err := setEnvVar(ENV_API_TOKEN, func(s string) { env.ApiToken = s }); err != nil {
@@ -80,11 +88,11 @@ func loadEnvironment() (Environment, error) {
 		env.Cooldown = time.Duration(n) * time.Second
 	})
 
-	return env, nil
-}
+	setEnvVarIntDefault(ENV_PORT, 8080, func(n int) { env.Port = n })
+	setEnvVar(ENV_USERNAME, func(s string) { env.Username = s })
+	setEnvVar(ENV_PASSWORD, func(s string) { env.Password = s })
 
-func isBlank(s string) bool {
-	return strings.TrimSpace(s) == ""
+	return env, nil
 }
 
 func setEnvVar(name string, consumer func(string)) error {
@@ -114,4 +122,8 @@ func setEnvVarInt(name string, consumer func(int)) error {
 	}
 	consumer(n)
 	return nil
+}
+
+func isBlank(s string) bool {
+	return strings.TrimSpace(s) == ""
 }

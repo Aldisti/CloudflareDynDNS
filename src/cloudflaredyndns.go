@@ -6,6 +6,7 @@ import (
 
 	"github.com/Aldisti/CloudflareDynDNS/cloudflare"
 	"github.com/Aldisti/CloudflareDynDNS/config"
+	"github.com/Aldisti/CloudflareDynDNS/listener"
 	"github.com/Aldisti/CloudflareDynDNS/poller"
 )
 
@@ -25,7 +26,7 @@ func main() {
 	case config.MODE_POLLER:
 		poller.Run()
 	case config.MODE_LISTENER:
-		panic("Not implemented yet")
+		listener.Run()
 	default:
 		panic(fmt.Errorf("Invalid mode '%s'", env.Mode))
 	}
