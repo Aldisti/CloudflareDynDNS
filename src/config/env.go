@@ -1,10 +1,11 @@
-package internal
+package config
 
 import (
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var (
@@ -12,19 +13,36 @@ var (
 )
 
 const (
+	MODE_POLLER   = "POLLER"
+	MODE_LISTENER = "LISTENER"
+)
+
+const (
+	ENV_MODE      = "MODE"
 	ENV_API_TOKEN = "API_TOKEN"
 	ENV_DOMAIN    = "DOMAIN"
+	ENV_TIMEOUT   = "TIMEOUT"
 	ENV_INTERVAL  = "INTERVAL"
 	ENV_MAX_FAILS = "MAX_FAILURES"
-	ENV_TIMEOUT   = "TIMEOUT"
+	ENV_COOLDOWN  = "COOLDOWN"
+	ENV_PORT      = "PORT"
+	ENV_USERNAME  = "USERNAME"
+	ENV_PASSWORD  = "PASSWORD"
 )
 
 type Environment struct {
+	Mode     string
 	ApiToken string
-	Domains   []string
+
+	Domains  []string
 	Interval int
 	MaxFails int
-	Timeout  int
+	Timeout  time.Duration
+	Cooldown time.Duration
+	// Listener mode-only variables
+	Port     int
+	Username string
+	Password string
 }
 
 func GetEnv() *Environment {
@@ -48,6 +66,10 @@ func GetEnvSafe() (*Environment, error) {
 
 func loadEnvironment() (Environment, error) {
 	env := Environment{}
+
+	if err := setEnvVar(ENV_MODE, func(s string) { env.Mode = strings.ToUpper(s) }); err != nil {
+		env.Mode = MODE_POLLER
+	}
 	if err := setEnvVar(ENV_API_TOKEN, func(s string) { env.ApiToken = s }); err != nil {
 		return env, err
 	}
@@ -57,14 +79,20 @@ func loadEnvironment() (Environment, error) {
 	}
 
 	setEnvVarIntDefault(ENV_INTERVAL, 60, func(n int) { env.Interval = n })
-	setEnvVarIntDefault(ENV_MAX_FAILS, 5, func(n int) { env.MaxFails = n })
-	setEnvVarIntDefault(ENV_TIMEOUT, 2, func(n int) { env.Timeout = n })
+	setEnvVarIntDefault(ENV_MAX_FAILS, -1, func(n int) { env.MaxFails = n })
+
+	setEnvVarIntDefault(ENV_TIMEOUT, 2, func(n int) {
+		env.Timeout = time.Duration(n) * time.Second
+	})
+	setEnvVarIntDefault(ENV_COOLDOWN, -1, func(n int) {
+		env.Cooldown = time.Duration(n) * time.Second
+	})
+
+	setEnvVarIntDefault(ENV_PORT, 8080, func(n int) { env.Port = n })
+	setEnvVar(ENV_USERNAME, func(s string) { env.Username = s })
+	setEnvVar(ENV_PASSWORD, func(s string) { env.Password = s })
 
 	return env, nil
-}
-
-func isBlank(s string) bool {
-	return strings.TrimSpace(s) == ""
 }
 
 func setEnvVar(name string, consumer func(string)) error {
@@ -94,4 +122,8 @@ func setEnvVarInt(name string, consumer func(int)) error {
 	}
 	consumer(n)
 	return nil
+}
+
+func isBlank(s string) bool {
+	return strings.TrimSpace(s) == ""
 }

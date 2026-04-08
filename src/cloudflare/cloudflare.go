@@ -7,13 +7,12 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
-	"github.com/Aldisti/CloudflareDynDNS/internal"
+	"github.com/Aldisti/CloudflareDynDNS/config"
 )
 
 const (
-	LIST_ZONES = "https://api.cloudflare.com/client/v4/zones"
+	LIST_ZONES     = "https://api.cloudflare.com/client/v4/zones"
 	LIST_RECORDS   = "https://api.cloudflare.com/client/v4/zones/%s/dns_records?name=%s&type=%s"
 	CREATE_RECORDS = "https://api.cloudflare.com/client/v4/zones/%s/dns_records"
 	UPDATE_RECORD  = "https://api.cloudflare.com/client/v4/zones/%s/dns_records/%s"
@@ -199,7 +198,7 @@ func SetupZones() error {
  */
 
 func buildRequest(method, url, body string) (*http.Request, error) {
-	env := internal.GetEnv()
+	env := config.GetEnv()
 
 	var reqBody io.Reader
 	if body != "" {
@@ -218,9 +217,9 @@ func buildRequest(method, url, body string) (*http.Request, error) {
 }
 
 func makeRequest(req *http.Request, response any) error {
-	env := internal.GetEnv()
+	env := config.GetEnv()
 	client := http.Client{
-		Timeout: time.Duration(env.Timeout) * time.Second,
+		Timeout: env.Timeout,
 	}
 
 	res, err := client.Do(req)
