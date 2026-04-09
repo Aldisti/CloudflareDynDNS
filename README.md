@@ -1,58 +1,91 @@
 # CloudflareDynDNS
 
-CloudflareDynDNS is a lightweight Go application that keeps a Cloudflare DNS record updated with your current public IP.
+CloudflareDynDNS keeps Cloudflare A records pointed at the current public IP address. It can run in two modes:
+
+- Poller mode updates a fixed list of domains on a schedule.
+- Listener mode exposes an authenticated HTTP endpoint for routers or other clients to trigger updates.
+
+The listener has been tested with a FRITZ!Box 7530 and should work with other Fritz!Box routers that can call a webhook after the WAN IP changes.
 
 ## Requirements
 
-- Go 1.24+
-- A Cloudflare API token with permission to edit DNS records
-
-## Build
-
-### Build locally
-
-```sh
-git clone https://github.com/Aldisti/CloudflareDynDNS.git
-cd CloudflareDynDNS
-go build -C src -o CloudflareDynDNS .
-```
-
-This creates the binary at `src/CloudflareDynDNS`.
-
-### Build Docker image
-
-```sh
-git clone https://github.com/Aldisti/CloudflareDynDNS.git
-cd CloudflareDynDNS
-CGO_ENABLED=0 GOOS=linux go build -C src -a -installsuffix cgo -o CloudflareDynDNS .
-docker build -t cloudflare-dyndns:latest .
-```
+- A Cloudflare API token with permission to read zones and edit DNS records.
+- A build of the Go binary at `src/CloudflareDynDNS` before creating the Docker image.
 
 ## Configuration
 
-Environment variables:
+Environment variables are shared by both modes unless noted otherwise.
 
-- `API_TOKEN` (required): Cloudflare API token
-- `DOMAIN` (required): full domain name to update (for example myapp.example.com)
-- `INTERVAL` (optional): update interval in seconds
-- `MAX_FAILURES` (optional): maximum consecutive failures before exit
-- `TIMEOUT` (optional): HTTP timeout in seconds
+| Variable         | Mode     | Required | Default | Description |
+|------------------|----------|----------|---------|-------------|
+| **MODE**         | Both     | No       | POLLER  | Execution mode: _POLLER_ or _LISTENER_ |
+| **API_TOKEN**    | Both     | Yes      | N/A     | Cloudflare API token |
+| **TIMEOUT**      | Both     | No       | 5       | HTTP request timeout in seconds |
+| **DOMAIN**       | POLLER   | Yes      | N/A     | Comma-separated list of domain names to keep updated |
+| **INTERVAL**     | POLLER   | No       | 60      | Polling interval in seconds |
+| **MAX_FAILURES** | POLLER   | No       | -1      | Maximum consecutive failures before stopping (-1 disables the limit) |
+| **COOLDOWN**     | POLLER   | No       | -1      | Failure counter reset after this many seconds since last failure (-1 disables the cooldown) |
+| **PORT**         | LISTENER | No       | 8080    | HTTP server port |
+| **USERNAME**     | LISTENER | Yes      | N/A     | Basic auth username |
+| **PASSWORD**     | LISTENER | Yes      | N/A     | Basic auth password |
 
-Only `API_TOKEN` and `DOMAIN` are mandatory.
+
+## How It Works
+
+In Poller mode, the application looks up each domain in Cloudflare, creates missing A records, and then refreshes them on every interval.
+
+In Listener mode, the application serves updates at `/update` over HTTP Basic Auth. The hostname list is passed as repeated `hostname` query parameters, for example `?hostname=foo.example.com&hostname=bar.example.com`.
+
+Both modes resolve the current public IP from `https://api.ipify.org`.
+
+## Build
+
+Build the Linux binary compatible with the distroless image:
+
+```sh
+cd src
+CGO_ENABLED=0 GOOS=linux go build -o CloudflareDynDNS .
+```
+
+Then build the image from the repository's root dir:
+
+```sh
+docker build -t cloudflare-dyndns:latest .
+```
 
 ## Run
 
-### Run binary
+Poller mode:
 
 ```sh
-API_TOKEN=<api_token> DOMAIN=<your.full.domain> ./src/CloudflareDynDNS
-```
-
-### Run with Docker
-
-```sh
-docker run --rm \
+docker run -d \
+    -e MODE=POLLER \
     -e API_TOKEN=<api_token> \
-    -e DOMAIN=<your.full.domain> \
+    -e DOMAIN=foo.example.com,bar.example.com \
     cloudflare-dyndns:latest
 ```
+
+Listener mode:
+
+```sh
+docker run -d \
+    -p 8080:8080 \
+    -e MODE=LISTENER \
+    -e API_TOKEN=<api_token> \
+    -e USERNAME=something \
+    -e PASSWORD=a-very-random-secret \
+    cloudflare-dyndns:latest
+```
+
+To trigger an update in listener mode:
+
+```sh
+curl -u something:a-very-random-secret \
+    "http://localhost:8080/update?hostname=foo.example.com&hostname=bar.example.com"
+```
+
+## Notes
+
+- Poller mode creates missing A records automatically.
+- Listener mode updates existing A records only.
+
