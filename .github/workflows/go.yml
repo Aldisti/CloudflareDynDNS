@@ -3,6 +3,10 @@ name: Build and Push
 on:
   push:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'VERSION'
+      - 'Dockerfile'
 
 jobs:
   build-and-push:
