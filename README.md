@@ -21,10 +21,12 @@ Environment variables are shared by both modes unless noted otherwise.
 | **MODE**         | Both     | No       | N/A     | Execution mode: _POLLER_ or _LISTENER_ |
 | **API_TOKEN**    | Both     | Yes      | N/A     | Cloudflare API token |
 | **TIMEOUT**      | Both     | No       | 5       | HTTP request timeout in seconds |
-| **DOMAINS**       | POLLER   | Yes      | N/A     | Comma-separated list of domain names to keep updated |
+| **DOMAINS**      | POLLER   | Yes      | N/A     | Comma-separated list of domain names to keep updated |
 | **INTERVAL**     | POLLER   | No       | 60      | Polling interval in seconds |
 | **MAX_FAILURES** | POLLER   | No       | -1      | Maximum consecutive failures before stopping (-1 disables the limit) |
 | **COOLDOWN**     | POLLER   | No       | -1      | Failure counter reset after this many seconds since last failure (-1 disables the cooldown) |
+| **CAN_CREATE**   | POLLER   | No       | true    | Enables the creation of missing records in Cloudflare DNS |
+| **ADDRESS**      | LISTENER | No       | 0.0.0.0 | HTTP address |
 | **PORT**         | LISTENER | No       | 8080    | HTTP server port |
 | **USERNAME**     | LISTENER | Yes      | N/A     | Basic auth username |
 | **PASSWORD**     | LISTENER | Yes      | N/A     | Basic auth password |

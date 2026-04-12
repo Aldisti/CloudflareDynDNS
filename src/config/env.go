@@ -21,10 +21,11 @@ const (
 	ENV_API_TOKEN = "API_TOKEN"
 	ENV_TIMEOUT   = "TIMEOUT"
 
-	ENV_DOMAINS   = "DOMAINS"
-	ENV_INTERVAL  = "INTERVAL"
-	ENV_MAX_FAILS = "MAX_FAILURES"
-	ENV_COOLDOWN  = "COOLDOWN"
+	ENV_DOMAINS    = "DOMAINS"
+	ENV_INTERVAL   = "INTERVAL"
+	ENV_MAX_FAILS  = "MAX_FAILURES"
+	ENV_COOLDOWN   = "COOLDOWN"
+	ENV_CAN_CREATE = "CAN_CREATE"
 
 	ENV_ADDRESS  = "ADDRESS"
 	ENV_PORT     = "PORT"
@@ -39,10 +40,11 @@ type Environment struct {
 
 	// Poller mode-only variables
 
-	Domains  string
-	Interval string
-	MaxFails string
-	Cooldown string
+	Domains   string
+	Interval  string
+	MaxFails  string
+	Cooldown  string
+	CanCreate string
 
 	// Listener mode-only variables
 
@@ -67,17 +69,21 @@ func loadEnvironment() Environment {
 		Interval: "60",
 		MaxFails: "-1",
 		Cooldown: "-1",
+		CanCreate: "true",
 		Address:  "0.0.0.0",
 		Port:     "8080",
 	}
 
 	setEnvVar(ENV_MODE, &env.Mode)
 	setEnvVar(ENV_API_TOKEN, &env.ApiToken)
+
 	setEnvVar(ENV_DOMAINS, &env.Domains)
 	setEnvVar(ENV_TIMEOUT, &env.Timeout)
 	setEnvVar(ENV_INTERVAL, &env.Interval)
 	setEnvVar(ENV_MAX_FAILS, &env.MaxFails)
 	setEnvVar(ENV_COOLDOWN, &env.Cooldown)
+	setEnvVar(ENV_CAN_CREATE, &env.CanCreate)
+
 	setEnvVar(ENV_ADDRESS, &env.Address)
 	setEnvVar(ENV_PORT, &env.Port)
 	setEnvVar(ENV_USERNAME, &env.Username)

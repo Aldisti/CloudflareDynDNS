@@ -2,6 +2,7 @@ package poller
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ type Context struct {
 	Interval    int
 	MaxFailures int
 	Cooldown    time.Duration
+	CanCreate   bool
 
 	// Variables
 
@@ -101,12 +103,20 @@ func buildCtx(env *config.Environment) Context {
 	ctx.MaxFailures = common.GetIntUnsafe(env.MaxFails, "max failures")
 	ctx.Cooldown = time.Duration(common.GetIntUnsafe(env.Cooldown, "cooldown")) * time.Second
 
+	if b, err := strconv.ParseBool(env.CanCreate); err != nil {
+		panic(fmt.Errorf("Invalid value '%s' for %s", env.CanCreate, config.ENV_CAN_CREATE))
+	} else {
+		ctx.CanCreate = b
+	}
+
 	if err := validateEnv(ctx); err != nil {
 		panic(fmt.Errorf("Poller::buildCtx: %v", err))
 	}
 
-	if _, err := cloudflare.GetCurrentIp(); err != nil {
+	if ip, err := cloudflare.GetCurrentIp(); err != nil {
 		panic(fmt.Errorf("Cannot retrieve current public ip: %v", err))
+	} else {
+		ctx.CurrentIP = ip
 	}
 
 	for _, domain := range ctx.Domains {
@@ -125,6 +135,9 @@ func getOrCreateRecord(ctx *Context, domain string) (cloudflare.Record, error) {
 	record, ok, err := cloudflare.GetFirstRecord(domain, "A")
 	if ok {
 		return record, nil
+	}
+	if !ctx.CanCreate {
+		return record, fmt.Errorf("Record '%s' not found and cannot create a new one", domain)
 	}
 	if err != nil {
 		fmt.Printf("Error while searching for %s: %s\n", domain, err) // warning
