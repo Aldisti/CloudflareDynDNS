@@ -18,10 +18,10 @@ Environment variables are shared by both modes unless noted otherwise.
 
 | Variable         | Mode     | Required | Default | Description |
 |------------------|----------|----------|---------|-------------|
-| **MODE**         | Both     | No       | POLLER  | Execution mode: _POLLER_ or _LISTENER_ |
+| **MODE**         | Both     | No       | N/A     | Execution mode: _POLLER_ or _LISTENER_ |
 | **API_TOKEN**    | Both     | Yes      | N/A     | Cloudflare API token |
 | **TIMEOUT**      | Both     | No       | 5       | HTTP request timeout in seconds |
-| **DOMAIN**       | POLLER   | Yes      | N/A     | Comma-separated list of domain names to keep updated |
+| **DOMAINS**       | POLLER   | Yes      | N/A     | Comma-separated list of domain names to keep updated |
 | **INTERVAL**     | POLLER   | No       | 60      | Polling interval in seconds |
 | **MAX_FAILURES** | POLLER   | No       | -1      | Maximum consecutive failures before stopping (-1 disables the limit) |
 | **COOLDOWN**     | POLLER   | No       | -1      | Failure counter reset after this many seconds since last failure (-1 disables the cooldown) |
@@ -61,7 +61,7 @@ Poller mode:
 docker run -d \
     -e MODE=POLLER \
     -e API_TOKEN=<api_token> \
-    -e DOMAIN=foo.example.com,bar.example.com \
+    -e DOMAINS=foo.example.com,bar.example.com \
     cloudflare-dyndns:latest
 ```
 
