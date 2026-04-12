@@ -3,125 +3,98 @@ package config
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
-	"time"
 )
 
-var (
-	env *Environment = nil
-)
+var env *Environment = nil
 
+// Constant values
 const (
 	MODE_POLLER   = "POLLER"
 	MODE_LISTENER = "LISTENER"
 )
 
+// Environment variables names
 const (
 	ENV_MODE      = "MODE"
 	ENV_API_TOKEN = "API_TOKEN"
-	ENV_DOMAIN    = "DOMAIN"
 	ENV_TIMEOUT   = "TIMEOUT"
+
+	ENV_DOMAINS   = "DOMAINS"
 	ENV_INTERVAL  = "INTERVAL"
 	ENV_MAX_FAILS = "MAX_FAILURES"
 	ENV_COOLDOWN  = "COOLDOWN"
-	ENV_PORT      = "PORT"
-	ENV_USERNAME  = "USERNAME"
-	ENV_PASSWORD  = "PASSWORD"
+
+	ENV_ADDRESS  = "ADDRESS"
+	ENV_PORT     = "PORT"
+	ENV_USERNAME = "USERNAME"
+	ENV_PASSWORD = "PASSWORD"
 )
 
 type Environment struct {
 	Mode     string
 	ApiToken string
+	Timeout  string
 
-	Domains  []string
-	Interval int
-	MaxFails int
-	Timeout  time.Duration
-	Cooldown time.Duration
+	// Poller mode-only variables
+
+	Domains  string
+	Interval string
+	MaxFails string
+	Cooldown string
+
 	// Listener mode-only variables
-	Port     int
+
+	Address  string
+	Port     string
 	Username string
 	Password string
 }
 
 func GetEnv() *Environment {
-	if env, err := GetEnvSafe(); err != nil {
-		panic(err)
-	} else {
-		return env
-	}
-}
-
-func GetEnvSafe() (*Environment, error) {
 	if env == nil {
-		if e, err := loadEnvironment(); err != nil {
-			return nil, fmt.Errorf("Couldn't load env vars: %s", err)
-		} else {
-			env = &e
-		}
+		e := loadEnvironment()
+		env = &e
 	}
-	return env, nil
+	return env
 }
 
-func loadEnvironment() (Environment, error) {
-	env := Environment{}
-
-	if err := setEnvVar(ENV_MODE, func(s string) { env.Mode = strings.ToUpper(s) }); err != nil {
-		env.Mode = MODE_POLLER
-	}
-	if err := setEnvVar(ENV_API_TOKEN, func(s string) { env.ApiToken = s }); err != nil {
-		return env, err
-	}
-
-	if err := setEnvVar(ENV_DOMAIN, func(s string) { env.Domains = strings.Split(s, ",") }); err != nil {
-		return env, err
+func loadEnvironment() Environment {
+	env := Environment{
+		Timeout:  "5",
+		Interval: "60",
+		MaxFails: "-1",
+		Cooldown: "-1",
+		Address:  "0.0.0.0",
+		Port:     "8080",
 	}
 
-	setEnvVarIntDefault(ENV_INTERVAL, 60, func(n int) { env.Interval = n })
-	setEnvVarIntDefault(ENV_MAX_FAILS, -1, func(n int) { env.MaxFails = n })
+	setEnvVar(ENV_MODE, &env.Mode)
+	setEnvVar(ENV_API_TOKEN, &env.ApiToken)
+	setEnvVar(ENV_DOMAINS, &env.Domains)
+	setEnvVar(ENV_TIMEOUT, &env.Timeout)
+	setEnvVar(ENV_INTERVAL, &env.Interval)
+	setEnvVar(ENV_MAX_FAILS, &env.MaxFails)
+	setEnvVar(ENV_COOLDOWN, &env.Cooldown)
+	setEnvVar(ENV_ADDRESS, &env.Address)
+	setEnvVar(ENV_PORT, &env.Port)
+	setEnvVar(ENV_USERNAME, &env.Username)
+	setEnvVar(ENV_PASSWORD, &env.Password)
 
-	setEnvVarIntDefault(ENV_TIMEOUT, 2, func(n int) {
-		env.Timeout = time.Duration(n) * time.Second
-	})
-	setEnvVarIntDefault(ENV_COOLDOWN, -1, func(n int) {
-		env.Cooldown = time.Duration(n) * time.Second
-	})
+	if isBlank(env.Mode) {
+		panic(fmt.Errorf("Missing env var: %s", ENV_MODE))
+	}
+	if isBlank(env.ApiToken) {
+		panic(fmt.Errorf("Missing env var: %s", ENV_API_TOKEN))
+	}
 
-	setEnvVarIntDefault(ENV_PORT, 8080, func(n int) { env.Port = n })
-	setEnvVar(ENV_USERNAME, func(s string) { env.Username = s })
-	setEnvVar(ENV_PASSWORD, func(s string) { env.Password = s })
-
-	return env, nil
+	return env
 }
 
-func setEnvVar(name string, consumer func(string)) error {
-	if s, ok := os.LookupEnv(name); !ok || isBlank(s) {
-		return fmt.Errorf("Error: missing env variable: %s", name)
-	} else {
-		consumer(s)
-		return nil
+func setEnvVar(name string, toSet *string) {
+	if s, ok := os.LookupEnv(name); ok && !isBlank(s) {
+		*toSet = s
 	}
-}
-
-func setEnvVarIntDefault(name string, def int, consumer func(int)) {
-	if err := setEnvVarInt(name, consumer); err != nil {
-		consumer(def)
-		fmt.Printf("Using default value %d for %s\n", def, name)
-	}
-}
-
-func setEnvVarInt(name string, consumer func(int)) error {
-	s, ok := os.LookupEnv(name)
-	if !ok || isBlank(s) {
-		return fmt.Errorf("Error: missing env variable: %s", name)
-	}
-	n, err := strconv.Atoi(s)
-	if err != nil {
-		return fmt.Errorf("Error: variable %s must be a valid int: %s", name, err)
-	}
-	consumer(n)
-	return nil
 }
 
 func isBlank(s string) bool {

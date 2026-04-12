@@ -13,18 +13,21 @@ const (
 	PARAM_HOSTNAME = "hostname"
 )
 
+var credentials = make(map[string]string)
+
 type Context struct {
-	Env      *config.Environment
+	Port        int
+	Address     string
 }
 
-func Run() {
-	ctx := buildCtx()
+func Run(env *config.Environment) {
+	ctx := buildCtx(env)
 
 	http.HandleFunc("/update", handleUpdate)
 
-	fmt.Printf("Starting server on port %d\n", ctx.Env.Port)
+	fmt.Printf("Starting server at %s:%d\n", ctx.Address, ctx.Port)
 
-	addr := fmt.Sprintf("0.0.0.0:%d", ctx.Env.Port)
+	addr := fmt.Sprintf("%s:%d", ctx.Address, ctx.Port)
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		fmt.Println("Error: failed to ListenAndServe:", err)
 	}
@@ -53,7 +56,7 @@ func handleUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
 func updateHostnames(domains []string) error {
-	ip, err := common.GetCurrentIp()
+	ip, err := cloudflare.GetCurrentIp()
 	if err != nil {
 		return err
 	}
@@ -73,22 +76,44 @@ func updateHostnames(domains []string) error {
 	return nil
 }
 
-func buildCtx() Context {
-	ctx := Context{
-		Env: config.GetEnv(),
-	}
+func buildCtx(env *config.Environment) Context {
+	ctx := Context{}
 
-	if common.IsBlank(ctx.Env.Username) {
-		panic(fmt.Errorf("Error: missing env variable %s", config.ENV_USERNAME))
+	if common.IsBlank(env.Username) {
+		panic(fmt.Errorf("Missing env var: %s", config.ENV_USERNAME))
 	}
-	if common.IsBlank(ctx.Env.Password) {
-		panic(fmt.Errorf("Error: missing env variable %s", config.ENV_PASSWORD))
+	if common.IsBlank(env.Password) {
+		panic(fmt.Errorf("Missing env var: %s", config.ENV_PASSWORD))
+	}
+	credentials[env.Username] = env.Password
+
+	ctx.Port = common.GetIntUnsafe(env.Port, "port")
+	ctx.Address = env.Address
+
+	if err := validateEnv(ctx); err != nil {
+		panic(fmt.Errorf("Listener::buildCtx: %v", err))
 	}
 
 	return ctx
 }
 
+func validateEnv(ctx Context) error {
+	if ctx.Port <= 0 {
+		return fmt.Errorf("Port must be greater than 0")
+	} else if ctx.Port >= 65536 {
+		return fmt.Errorf("Port must be lower than 65536")
+	}
+
+	if common.IsBlank(ctx.Address) {
+		return fmt.Errorf("Address cannot be blank")
+	}
+	return nil
+}
+
 func compareCredentials(username, password string) bool {
-	env := config.GetEnv()
-	return env.Username == username && env.Password == password
+	if p, ok := credentials[username]; !ok {
+		return false
+	} else {
+		return p == password
+	}
 }

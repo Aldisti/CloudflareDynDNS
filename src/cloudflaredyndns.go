@@ -12,7 +12,7 @@ import (
 
 type Context struct {
 	Env         *config.Environment
-	Records      []cloudflare.Record
+	Records     []cloudflare.Record
 	CurrentIP   string
 	LastUpdate  time.Time
 	Failures    int
@@ -24,10 +24,13 @@ func main() {
 
 	switch env.Mode {
 	case config.MODE_POLLER:
-		poller.Run()
+		poller.Run(env)
 	case config.MODE_LISTENER:
-		listener.Run()
+		listener.Run(env)
 	default:
-		panic(fmt.Errorf("Invalid mode '%s'", env.Mode))
+		panic(fmt.Errorf(
+			"Invalid mode '%s', valid values are: %s and %s",
+			env.Mode, config.MODE_POLLER, config.MODE_POLLER,
+		))
 	}
 }

@@ -7,7 +7,9 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/Aldisti/CloudflareDynDNS/common"
 	"github.com/Aldisti/CloudflareDynDNS/config"
 )
 
@@ -58,6 +60,7 @@ type Response[T any] struct {
 
 var (
 	zones = make(map[string]Zone)
+	client *http.Client
 )
 
 /*
@@ -193,6 +196,29 @@ func SetupZones() error {
 	return nil
 }
 
+func GetCurrentIp() (string, error) {
+
+	req, err := http.NewRequest(http.MethodGet, "https://api.ipify.org", nil)
+	if err != nil {
+		return "", fmt.Errorf("NewRequest failed: %s", err) // warn
+	}
+
+	res, err := getClient().Do(req)
+	if err != nil {
+		return "", fmt.Errorf("Couldn't make request: %s", err)
+	}
+
+	resBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		return "", fmt.Errorf("Couldn't read response: %s", err)
+	}
+	if res.StatusCode == 200 {
+		return string(resBody), nil
+	} else {
+		return "", fmt.Errorf("Received status code %d: %s", res.StatusCode, resBody)
+	}
+}
+
 /*
  * Internal functions
  */
@@ -217,12 +243,7 @@ func buildRequest(method, url, body string) (*http.Request, error) {
 }
 
 func makeRequest(req *http.Request, response any) error {
-	env := config.GetEnv()
-	client := http.Client{
-		Timeout: env.Timeout,
-	}
-
-	res, err := client.Do(req)
+	res, err := getClient().Do(req)
 	if err != nil {
 		return fmt.Errorf("Failed to send request: %s", err)
 	}
@@ -243,4 +264,17 @@ func makeRequest(req *http.Request, response any) error {
 	}
 
 	return nil
+}
+
+func getClient() *http.Client {
+	if client != nil {
+		return client
+	}
+	env := config.GetEnv()
+	timeout := common.GetIntUnsafe(env.Timeout, "timeout")
+	client = &http.Client{
+		Timeout: time.Duration(timeout) * time.Second,
+	}
+	fmt.Println("Client setup") // debug
+	return client
 }
