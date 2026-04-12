@@ -3,7 +3,8 @@ package config
 import (
 	"fmt"
 	"os"
-	"strings"
+
+	"github.com/Aldisti/CloudflareDynDNS/common"
 )
 
 var env *Environment = nil
@@ -51,11 +52,12 @@ type Environment struct {
 	Password string
 }
 
+func init() {
+	e := loadEnvironment()
+	env = &e
+}
+
 func GetEnv() *Environment {
-	if env == nil {
-		e := loadEnvironment()
-		env = &e
-	}
 	return env
 }
 
@@ -81,10 +83,10 @@ func loadEnvironment() Environment {
 	setEnvVar(ENV_USERNAME, &env.Username)
 	setEnvVar(ENV_PASSWORD, &env.Password)
 
-	if isBlank(env.Mode) {
+	if common.IsBlank(env.Mode) {
 		panic(fmt.Errorf("Missing env var: %s", ENV_MODE))
 	}
-	if isBlank(env.ApiToken) {
+	if common.IsBlank(env.ApiToken) {
 		panic(fmt.Errorf("Missing env var: %s", ENV_API_TOKEN))
 	}
 
@@ -92,11 +94,7 @@ func loadEnvironment() Environment {
 }
 
 func setEnvVar(name string, toSet *string) {
-	if s, ok := os.LookupEnv(name); ok && !isBlank(s) {
+	if s, ok := os.LookupEnv(name); ok && !common.IsBlank(s) {
 		*toSet = s
 	}
-}
-
-func isBlank(s string) bool {
-	return strings.TrimSpace(s) == ""
 }

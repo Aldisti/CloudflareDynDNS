@@ -63,6 +63,14 @@ var (
 	client *http.Client
 )
 
+func init() {
+	env := config.GetEnv()
+	timeout := common.GetIntUnsafe(env.Timeout, "timeout")
+	client = &http.Client{
+		Timeout: time.Duration(timeout) * time.Second,
+	}
+}
+
 /*
  * Main API methods
  */
@@ -197,13 +205,12 @@ func SetupZones() error {
 }
 
 func GetCurrentIp() (string, error) {
-
 	req, err := http.NewRequest(http.MethodGet, "https://api.ipify.org", nil)
 	if err != nil {
 		return "", fmt.Errorf("NewRequest failed: %s", err) // warn
 	}
 
-	res, err := getClient().Do(req)
+	res, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't make request: %s", err)
 	}
@@ -243,7 +250,7 @@ func buildRequest(method, url, body string) (*http.Request, error) {
 }
 
 func makeRequest(req *http.Request, response any) error {
-	res, err := getClient().Do(req)
+	res, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("Failed to send request: %s", err)
 	}
@@ -264,17 +271,4 @@ func makeRequest(req *http.Request, response any) error {
 	}
 
 	return nil
-}
-
-func getClient() *http.Client {
-	if client != nil {
-		return client
-	}
-	env := config.GetEnv()
-	timeout := common.GetIntUnsafe(env.Timeout, "timeout")
-	client = &http.Client{
-		Timeout: time.Duration(timeout) * time.Second,
-	}
-	fmt.Println("Client setup") // debug
-	return client
 }

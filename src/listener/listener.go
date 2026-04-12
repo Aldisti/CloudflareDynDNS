@@ -16,8 +16,8 @@ const (
 var credentials = make(map[string]string)
 
 type Context struct {
-	Port        int
-	Address     string
+	Port    int
+	Address string
 }
 
 func Run(env *config.Environment) {
@@ -70,7 +70,7 @@ func updateHostnames(domains []string) error {
 		if _, err := cloudflare.UpdateRecord(domain, record.ID, ip); err != nil {
 			return err
 		} else {
-			fmt.Printf("Record %s updated with new ip %s\n", domain, ip)
+			fmt.Printf("Record %s updated with new ip %s\n", domain, ip) // info
 		}
 	}
 	return nil
