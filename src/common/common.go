@@ -2,37 +2,37 @@ package common
 
 import (
 	"fmt"
-	"io"
-	"net/http"
+	"strconv"
 	"strings"
-
-	"github.com/Aldisti/CloudflareDynDNS/config"
 )
-
-func GetCurrentIp() (string, error) {
-	req, err := http.NewRequest(http.MethodGet, "https://api.ipify.org", nil)
-	if err != nil {
-		return "", fmt.Errorf("NewRequest failed: %s", err) // warn
-	}
-
-	env := config.GetEnv()
-	client := http.Client{Timeout: env.Timeout}
-	res, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("Couldn't make request: %s", err)
-	}
-
-	resBody, err := io.ReadAll(res.Body)
-	if err != nil {
-		return "", fmt.Errorf("Couldn't read response: %s", err)
-	}
-	if res.StatusCode == 200 {
-		return string(resBody), nil
-	} else {
-		return "", fmt.Errorf("Received status code %d: %s", res.StatusCode, resBody)
-	}
-}
 
 func IsBlank(s string) bool {
 	return strings.TrimSpace(s) == ""
+}
+
+func IsNotBlank(s string) bool {
+	return !IsBlank(s)
+}
+
+func Filter[T any](slice []T, predicate func(T)bool) []T {
+	filtered := make([]T, 0)
+	for _, e := range slice {
+		if predicate(e) {
+			filtered = append(filtered, e)
+		}
+	}
+	return filtered
+}
+
+// getIntUnsafe parses a string to integer and panics if parsing fails.
+//
+// Parameters:
+//   - value: the string to parse into an integer
+//   - name: used only in the error message for context
+func GetIntUnsafe(value, name string) int {
+	if n, err := strconv.Atoi(value); err != nil {
+		panic(fmt.Errorf("Value of %s must be an integer: %v", name, err))
+	} else {
+		return n
+	}
 }

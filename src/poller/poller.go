@@ -2,6 +2,8 @@ package poller
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Aldisti/CloudflareDynDNS/cloudflare"
@@ -10,26 +12,49 @@ import (
 )
 
 type Context struct {
-	Env         *config.Environment
-	Records      []cloudflare.Record
+	// Settings
+
+	Domains     []string
+	Interval    int
+	MaxFailures int
+	Cooldown    time.Duration
+	CanCreate   bool
+	Ttl         int
+	Proxied     bool
+	Comment     string
+
+	// Variables
+
+	Records     []cloudflare.Record
 	CurrentIP   string
 	LastUpdate  time.Time
 	Failures    int
 	LastFailure time.Time
 }
 
-func Run() {
-	ctx := buildCtx()
+func (ctx *Context) addFailure() {
+	ctx.Failures++
+	ctx.LastFailure = time.Now()
+	fmt.Println("Failures reset") // debug
+}
+
+func (ctx *Context) resetFailures() {
+	ctx.Failures = 0
+	ctx.LastFailure = time.Now()
+}
+
+func Run(env *config.Environment) {
+	ctx := buildCtx(env)
 
 	done := make(chan bool)
-	ticker := time.NewTicker(time.Duration(ctx.Env.Interval) * time.Second)
+	ticker := time.NewTicker(time.Duration(ctx.Interval) * time.Second)
 	defer ticker.Stop()
 
 	fmt.Println("Starting POLLER mode") // info
 
 	for {
 		select {
-		case <- done:
+		case <-done:
 			return
 		case <-ticker.C:
 			if !routine(&ctx) {
@@ -41,15 +66,14 @@ func Run() {
 
 func routine(ctx *Context) bool {
 
-	if ctx.Env.Cooldown >= 0 && time.Since(ctx.LastFailure) > ctx.Env.Cooldown {
+	if ctx.Cooldown > 0 && time.Since(ctx.LastFailure) > ctx.Cooldown {
 		ctx.resetFailures()
-		fmt.Println("Failures reset") // debug
-	} else if ctx.Env.MaxFails >= 0 && ctx.Failures > ctx.Env.MaxFails {
-		fmt.Println("Reached maximum number of failures, aborting") // info
+	} else if ctx.MaxFailures >= 0 && ctx.Failures > ctx.MaxFailures {
+		fmt.Println("Reached maximum number of failures, aborting") // warning
 		return false
 	}
 
-	ip, err := common.GetCurrentIp()
+	ip, err := cloudflare.GetCurrentIp()
 	if err != nil {
 		ctx.addFailure()
 		fmt.Println(err) // debug
@@ -71,60 +95,79 @@ func routine(ctx *Context) bool {
 	return true
 }
 
-
-func buildCtx() (Context) {
+func buildCtx(env *config.Environment) Context {
 	ctx := Context{
 		Failures: 0,
-		Records: make([]cloudflare.Record, 0),
+		Records:  make([]cloudflare.Record, 0),
 	}
 
-	if env, err := config.GetEnvSafe(); err != nil {
-		panic(err)
-	} else {
-		ctx.Env = env
+	ctx.Domains = common.Filter(strings.Split(env.Domains, ","), common.IsNotBlank)
+	ctx.Interval = common.GetIntUnsafe(env.Interval, "interval")
+	ctx.MaxFailures = common.GetIntUnsafe(env.MaxFails, "max failures")
+	ctx.Cooldown = time.Duration(common.GetIntUnsafe(env.Cooldown, "cooldown")) * time.Second
+	ctx.CanCreate, _ = strconv.ParseBool(env.CanCreate)
+	ctx.Ttl = common.GetIntUnsafe(env.Ttl, "ttl")
+	ctx.Proxied, _ = strconv.ParseBool(env.Proxied)
+	ctx.Comment = env.Comment
+
+	if err := validateEnv(ctx); err != nil {
+		panic(fmt.Errorf("Poller::buildCtx: %v", err))
 	}
 
-	if ip, err := common.GetCurrentIp(); err != nil {
-		panic(err)
+	if ip, err := cloudflare.GetCurrentIp(); err != nil {
+		panic(fmt.Errorf("Cannot retrieve current public ip: %v", err))
 	} else {
 		ctx.CurrentIP = ip
 	}
 
-	for _, domain := range ctx.Env.Domains {
-		record, ok, err := cloudflare.GetFirstRecord(domain, "A")
-		if ok {
+	for _, domain := range ctx.Domains {
+		if record, err := getOrCreateRecord(&ctx, domain); err != nil {
+			panic(fmt.Errorf("Poller::buildCtx: %v", err))
+		} else {
 			ctx.Records = append(ctx.Records, record)
-			continue
 		}
-		if err != nil {
-			fmt.Printf("Error while searching for %s: %s\n", domain, err)
-		}
-		record = cloudflare.Record{
-			Name: domain,
-			Type: "A",
-			Content: ctx.CurrentIP,
-			TTL: max(ctx.Env.Interval * 2, 60),
-			Proxied: false,
-			Comment: "Created by github.com/aldisti/CloudflareDynDNS",
-		}
-		record, err = cloudflare.CreateRecord(record)
-		if err != nil {
-			panic(fmt.Errorf("BuildCtx: %s", err))
-		}
-		ctx.Records = append(ctx.Records, record)
-		fmt.Printf("Record %s created\n", domain)
 	}
 
-	fmt.Println("Context successfully built")
+	fmt.Println("Poller context successfully built") // info
 	return ctx
 }
 
-func (ctx *Context) addFailure() {
-	ctx.Failures++
-	ctx.LastFailure = time.Now()
+func getOrCreateRecord(ctx *Context, domain string) (cloudflare.Record, error) {
+	record, ok, err := cloudflare.GetFirstRecord(domain, "A")
+	if ok {
+		return record, nil
+	}
+	if !ctx.CanCreate {
+		return record, fmt.Errorf("Record '%s' not found and cannot create a new one", domain)
+	}
+	if err != nil {
+		fmt.Printf("Error while searching for %s: %s\n", domain, err) // warning
+	}
+	record = cloudflare.Record{
+		Name:    domain,
+		Type:    "A",
+		Content: ctx.CurrentIP,
+		TTL:     ctx.Ttl,
+		Proxied: ctx.Proxied,
+		Comment: ctx.Comment,
+	}
+	record, err = cloudflare.CreateRecord(record)
+	if err != nil {
+		return record, fmt.Errorf("getOrCreateRecord: %v", err) // error
+	}
+	fmt.Println("Created record:", domain) // info
+	return record, nil
 }
 
-func (ctx *Context) resetFailures() {
-	ctx.Failures = 0
-	ctx.LastFailure = time.Now()
+func validateEnv(ctx Context) error {
+	if len(ctx.Domains) == 0 {
+		return fmt.Errorf("Configure at least 1 domain to update")
+	}
+	if ctx.Interval <= 0 {
+		return fmt.Errorf("Interval must be greater than 0")
+	}
+	if ctx.Ttl < 60 && ctx.Ttl != 1 {
+		return fmt.Errorf("Ttl must be equal to 1 or at least 60")
+	}
+	return nil
 }
