@@ -26,6 +26,9 @@ Environment variables are shared by both modes unless noted otherwise.
 | **MAX_FAILURES** | POLLER   | No       | -1      | Maximum consecutive failures before stopping (-1 disables the limit) |
 | **COOLDOWN**     | POLLER   | No       | -1      | Failure counter reset after this many seconds since last failure (-1 disables the cooldown) |
 | **CAN_CREATE**   | POLLER   | No       | true    | Enables the creation of missing records in Cloudflare DNS |
+| **TTL**          | POLLER   | No       | 60      | Specify the TTL value for newly created records (1 is auto) |
+| **PROXIED**      | POLLER   | No       | false   | Specify the Proxied value for newly created records in CF |
+| **COMMENT**      | POLLER   | No       |         | Specify the comment value for newly created records in CF |
 | **ADDRESS**      | LISTENER | No       | 0.0.0.0 | HTTP address |
 | **PORT**         | LISTENER | No       | 8080    | HTTP server port |
 | **USERNAME**     | LISTENER | Yes      | N/A     | Basic auth username |

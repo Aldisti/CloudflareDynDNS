@@ -26,6 +26,9 @@ const (
 	ENV_MAX_FAILS  = "MAX_FAILURES"
 	ENV_COOLDOWN   = "COOLDOWN"
 	ENV_CAN_CREATE = "CAN_CREATE"
+	ENV_TTL        = "TTL"
+	ENV_PROXIED    = "PROXIED"
+	ENV_COMMENT    = "COMMENT"
 
 	ENV_ADDRESS  = "ADDRESS"
 	ENV_PORT     = "PORT"
@@ -45,6 +48,9 @@ type Environment struct {
 	MaxFails  string
 	Cooldown  string
 	CanCreate string
+	Ttl       string
+	Proxied   string
+	Comment   string
 
 	// Listener mode-only variables
 
@@ -65,13 +71,16 @@ func GetEnv() *Environment {
 
 func loadEnvironment() Environment {
 	env := Environment{
-		Timeout:  "5",
-		Interval: "60",
-		MaxFails: "-1",
-		Cooldown: "-1",
+		Timeout:   "5",
+		Interval:  "60",
+		MaxFails:  "-1",
+		Cooldown:  "-1",
 		CanCreate: "true",
-		Address:  "0.0.0.0",
-		Port:     "8080",
+		Ttl:       "60",
+		Proxied:   "false",
+		Comment:   "Created by github.com/aldisti/CloudflareDynDNS",
+		Address:   "0.0.0.0",
+		Port:      "8080",
 	}
 
 	setEnvVar(ENV_MODE, &env.Mode)
@@ -83,6 +92,9 @@ func loadEnvironment() Environment {
 	setEnvVar(ENV_MAX_FAILS, &env.MaxFails)
 	setEnvVar(ENV_COOLDOWN, &env.Cooldown)
 	setEnvVar(ENV_CAN_CREATE, &env.CanCreate)
+	setEnvVar(ENV_TTL, &env.Ttl)
+	setEnvVar(ENV_PROXIED, &env.Proxied)
+	setEnvVar(ENV_COMMENT, &env.Comment)
 
 	setEnvVar(ENV_ADDRESS, &env.Address)
 	setEnvVar(ENV_PORT, &env.Port)

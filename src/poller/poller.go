@@ -19,6 +19,9 @@ type Context struct {
 	MaxFailures int
 	Cooldown    time.Duration
 	CanCreate   bool
+	Ttl         int
+	Proxied     bool
+	Comment     string
 
 	// Variables
 
@@ -102,12 +105,10 @@ func buildCtx(env *config.Environment) Context {
 	ctx.Interval = common.GetIntUnsafe(env.Interval, "interval")
 	ctx.MaxFailures = common.GetIntUnsafe(env.MaxFails, "max failures")
 	ctx.Cooldown = time.Duration(common.GetIntUnsafe(env.Cooldown, "cooldown")) * time.Second
-
-	if b, err := strconv.ParseBool(env.CanCreate); err != nil {
-		panic(fmt.Errorf("Invalid value '%s' for %s", env.CanCreate, config.ENV_CAN_CREATE))
-	} else {
-		ctx.CanCreate = b
-	}
+	ctx.CanCreate, _ = strconv.ParseBool(env.CanCreate)
+	ctx.Ttl = common.GetIntUnsafe(env.Ttl, "ttl")
+	ctx.Proxied, _ = strconv.ParseBool(env.Proxied)
+	ctx.Comment = env.Comment
 
 	if err := validateEnv(ctx); err != nil {
 		panic(fmt.Errorf("Poller::buildCtx: %v", err))
@@ -146,9 +147,9 @@ func getOrCreateRecord(ctx *Context, domain string) (cloudflare.Record, error) {
 		Name:    domain,
 		Type:    "A",
 		Content: ctx.CurrentIP,
-		TTL:     max(ctx.Interval/2, 60), // TODO: move these values into env vars
-		Proxied: false,
-		Comment: "Created by github.com/aldisti/CloudflareDynDNS",
+		TTL:     ctx.Ttl,
+		Proxied: ctx.Proxied,
+		Comment: ctx.Comment,
 	}
 	record, err = cloudflare.CreateRecord(record)
 	if err != nil {
@@ -164,6 +165,9 @@ func validateEnv(ctx Context) error {
 	}
 	if ctx.Interval <= 0 {
 		return fmt.Errorf("Interval must be greater than 0")
+	}
+	if ctx.Ttl < 60 && ctx.Ttl != 1 {
+		return fmt.Errorf("Ttl must be equal to 1 or at least 60")
 	}
 	return nil
 }
