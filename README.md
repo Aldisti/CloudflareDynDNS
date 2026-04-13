@@ -88,6 +88,6 @@ curl -u something:a-very-random-secret \
 
 ## Notes
 
-- Poller mode creates missing A records automatically.
+- Poller mode can create missing A records automatically.
 - Listener mode updates existing A records only.
 
